@@ -1,0 +1,505 @@
+
+
+Index · HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KLNCE // Secure Access Terminal</title>
+<style>
+  :root{
+    --bg: #05070a;
+    --bg-2: #070c10;
+    --glass: rgba(16, 22, 26, 0.55);
+    --glass-border: rgba(140, 255, 214, 0.14);
+    --mint: #4cffb3;
+    --mint-dim: #2a8f6a;
+    --violet: #7c8cff;
+    --text: #e8f0ec;
+    --muted: #7c8b87;
+    --err: #ff6b6b;
+    --mono: 'JetBrains Mono', 'Space Mono', 'Courier New', monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+ 
+  *{ box-sizing:border-box; margin:0; padding:0; }
+ 
+  html,body{
+    height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    overflow-x:hidden;
+  }
+ 
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.01ms !important; animation-iteration-count:1 !important; transition-duration:0.01ms !important; }
+  }
+ 
+  /* ---------- Background ---------- */
+  .bg{
+    position:fixed; inset:0; z-index:0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(124,140,255,0.10), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 85% 90%, rgba(76,255,179,0.08), transparent 60%),
+      var(--bg-2);
+  }
+  .grid{
+    position:fixed; inset:0; z-index:0;
+    background-image:
+      linear-gradient(rgba(76,255,179,0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(76,255,179,0.055) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, black 30%, transparent 80%);
+    animation: driftGrid 26s linear infinite;
+  }
+  @keyframes driftGrid{
+    0%{ background-position: 0 0, 0 0; }
+    100%{ background-position: 420px 0, 0 420px; }
+  }
+  .scanline{
+    position:fixed; left:0; right:0; height:120px; z-index:1; pointer-events:none;
+    background:linear-gradient(180deg, transparent, rgba(76,255,179,0.05), transparent);
+    animation: scan 7s ease-in-out infinite;
+  }
+  @keyframes scan{
+    0%{ top:-120px; }
+    50%{ top:100%; }
+    100%{ top:-120px; }
+  }
+  .particles{ position:fixed; inset:0; z-index:0; pointer-events:none; }
+  .particle{
+    position:absolute; width:2px; height:2px; border-radius:50%;
+    background:var(--mint); opacity:0.5;
+    box-shadow:0 0 6px 1px rgba(76,255,179,0.6);
+    animation: rise linear infinite;
+  }
+  @keyframes rise{
+    from{ transform:translateY(0); opacity:0; }
+    10%{ opacity:0.6; }
+    90%{ opacity:0.5; }
+    to{ transform:translateY(-100vh); opacity:0; }
+  }
+ 
+  /* ---------- Boot sequence ---------- */
+  .boot{
+    position:fixed; inset:0; z-index:50;
+    background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono);
+    transition:opacity 0.6s ease, visibility 0.6s ease;
+  }
+  .boot.hidden{ opacity:0; visibility:hidden; pointer-events:none; }
+  .boot-inner{ width:min(520px, 88vw); }
+  .boot-line{
+    font-size:13px; color:var(--mint-dim); margin-bottom:8px;
+    opacity:0; white-space:nowrap; overflow:hidden;
+    letter-spacing:0.5px;
+  }
+  .boot-line.show{ opacity:1; color:var(--mint); }
+  .boot-line .ok{ color:var(--muted); float:right; }
+  .boot-bar-track{
+    margin-top:18px; height:3px; width:100%; background:rgba(76,255,179,0.1); border-radius:2px; overflow:hidden;
+  }
+  .boot-bar-fill{
+    height:100%; width:0%; background:linear-gradient(90deg, var(--mint-dim), var(--mint));
+    transition:width 1.8s cubic-bezier(.4,0,.2,1);
+  }
+  .boot-cursor{ display:inline-block; width:8px; height:14px; background:var(--mint); margin-left:6px; animation:blink 1s step-end infinite; vertical-align:middle; }
+  @keyframes blink{ 50%{ opacity:0; } }
+ 
+  /* ---------- Layout ---------- */
+  .stage{
+    position:relative; z-index:2;
+    min-height:100vh; width:100%;
+    display:flex; align-items:center; justify-content:center;
+    padding:32px 20px;
+    opacity:0; transform:translateY(14px);
+    transition:opacity 0.7s ease, transform 0.7s ease;
+  }
+  .stage.in{ opacity:1; transform:translateY(0); }
+ 
+  .panel{
+    width:min(920px, 100%);
+    display:grid;
+    grid-template-columns: 1.05fr 1fr;
+    border-radius:18px;
+    overflow:hidden;
+    background:var(--glass);
+    border:1px solid var(--glass-border);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.02) inset;
+  }
+ 
+  /* Left console panel */
+  .console{
+    padding:38px 34px;
+    font-family:var(--mono);
+    background:linear-gradient(180deg, rgba(76,255,179,0.05), transparent 40%);
+    border-right:1px solid var(--glass-border);
+    display:flex; flex-direction:column; justify-content:space-between;
+    min-height:520px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand-logo{ height:32px; width:auto; border-radius:6px; display:block; }
+  .brand-name{ font-size:15px; letter-spacing:2px; color:var(--text); font-weight:600; }
+  .brand-name span{ color:var(--mint); }
+ 
+  .console-feed{ margin-top:34px; font-size:12.5px; line-height:1.9; color:var(--muted); }
+  .console-feed .tag{ color:var(--violet); }
+  .console-feed .val{ color:var(--mint); }
+  .console-feed .row{ opacity:0; animation: fadeIn 0.5s ease forwards; }
+ 
+  @keyframes fadeIn{ to{ opacity:1; } }
+ 
+  .console-quote{
+    margin-top:auto; padding-top:26px; border-top:1px dashed rgba(140,255,214,0.15);
+    font-size:12px; color:var(--muted); line-height:1.7;
+  }
+  .console-quote b{ color:var(--text); font-weight:600; }
+ 
+  /* Right form panel */
+  .form-side{ padding:42px 38px; display:flex; flex-direction:column; justify-content:center; }
+  .center-logo-wrap{ display:flex; justify-content:center; margin-bottom:20px; }
+  .center-logo{
+    width:110px; height:110px; object-fit:contain; border-radius:16px;
+    background:rgba(255,255,255,0.06); padding:6px;
+    border:1px solid var(--glass-border);
+    box-shadow:0 0 28px -6px rgba(76,255,179,0.4);
+  }
+  .form-eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:3px; color:var(--mint);
+    text-transform:uppercase; margin-bottom:10px;
+  }
+  .form-title{ font-size:26px; font-weight:700; letter-spacing:-0.3px; margin-bottom:6px; }
+  .form-sub{ font-size:13.5px; color:var(--muted); margin-bottom:30px; }
+ 
+  .field{ margin-bottom:18px; position:relative; }
+  .field label{
+    display:block; font-size:11.5px; font-family:var(--mono); letter-spacing:1px;
+    color:var(--muted); text-transform:uppercase; margin-bottom:7px;
+  }
+  .input-wrap{ position:relative; }
+  .field input{
+    width:100%; padding:13px 14px; padding-right:42px;
+    background:rgba(255,255,255,0.03);
+    border:1px solid rgba(255,255,255,0.09);
+    border-radius:9px; color:var(--text); font-size:14.5px;
+    font-family:var(--sans);
+    outline:none; transition:border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+  .field input::placeholder{ color:#4a5450; }
+  .field input:focus{
+    border-color:var(--mint);
+    box-shadow:0 0 0 3px rgba(76,255,179,0.12);
+    background:rgba(76,255,179,0.03);
+  }
+  .field.error input{ border-color:var(--err); box-shadow:0 0 0 3px rgba(255,107,107,0.12); }
+  .error-msg{
+    display:none; font-size:11.5px; color:var(--err); margin-top:6px; font-family:var(--mono);
+  }
+  .field.error .error-msg{ display:block; }
+  .field.shake{ animation: shake 0.4s ease; }
+  @keyframes shake{
+    0%,100%{ transform:translateX(0); }
+    20%{ transform:translateX(-6px); }
+    40%{ transform:translateX(6px); }
+    60%{ transform:translateX(-4px); }
+    80%{ transform:translateX(4px); }
+  }
+ 
+  .toggle-eye{
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer; padding:4px; color:var(--muted);
+    display:flex; align-items:center; transition:color 0.2s ease;
+  }
+  .toggle-eye:hover{ color:var(--mint); }
+  .toggle-eye svg{ width:18px; height:18px; }
+ 
+  .row-between{ display:flex; align-items:center; justify-content:space-between; margin:6px 0 24px; font-size:12.5px; }
+  .remember{ display:flex; align-items:center; gap:8px; color:var(--muted); cursor:pointer; user-select:none; }
+  .remember input{ accent-color:var(--mint); width:14px; height:14px; cursor:pointer; }
+  .forgot{ color:var(--violet); text-decoration:none; }
+  .forgot:hover{ text-decoration:underline; }
+ 
+  .submit-btn{
+    width:100%; padding:14px; border-radius:9px; border:none; cursor:pointer;
+    background:linear-gradient(90deg, var(--mint-dim), var(--mint));
+    color:#04120c; font-weight:700; font-size:14.5px; letter-spacing:0.3px;
+    font-family:var(--sans);
+    position:relative; overflow:hidden;
+    transition:transform 0.15s ease, box-shadow 0.2s ease;
+    box-shadow:0 8px 24px -8px rgba(76,255,179,0.5);
+  }
+  .submit-btn:hover{ transform:translateY(-1px); box-shadow:0 12px 28px -8px rgba(76,255,179,0.65); }
+  .submit-btn:active{ transform:translateY(0); }
+  .submit-btn:disabled{ opacity:0.75; cursor:default; transform:none; }
+ 
+  .btn-label{ display:inline-flex; align-items:center; gap:8px; }
+  .btn-spinner{
+    width:14px; height:14px; border-radius:50%;
+    border:2px solid rgba(4,18,12,0.25); border-top-color:#04120c;
+    animation:spin 0.7s linear infinite; display:none;
+  }
+  .submit-btn.loading .btn-spinner{ display:inline-block; }
+  .submit-btn.loading .btn-text{ opacity:0.85; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+ 
+  .decrypt-status{
+    margin-top:14px; font-family:var(--mono); font-size:11.5px; color:var(--mint-dim);
+    height:16px; opacity:0; transition:opacity 0.2s ease;
+  }
+  .decrypt-status.show{ opacity:1; }
+ 
+  .divider{ display:flex; align-items:center; gap:12px; margin:26px 0 18px; color:var(--muted); font-size:11px; font-family:var(--mono); }
+  .divider::before, .divider::after{ content:''; flex:1; height:1px; background:rgba(255,255,255,0.08); }
+ 
+  .footer-note{ text-align:center; font-size:12.5px; color:var(--muted); }
+  .footer-note a{ color:var(--mint); text-decoration:none; }
+  .footer-note a:hover{ text-decoration:underline; }
+ 
+  /* Responsive */
+  @media (max-width: 760px){
+    .panel{ grid-template-columns:1fr; }
+    .console{ display:none; }
+    .form-side{ padding:34px 26px; }
+  }
+</style>
+</head>
+<body>
+ 
+<div class="bg"></div>
+<div class="grid"></div>
+<div class="scanline"></div>
+<div class="particles" id="particles"></div>
+ 
+<!-- Boot sequence -->
+<div class="boot" id="boot">
+  <div class="boot-inner">
+    <div class="boot-line" data-ok="OK">&gt; establishing secure channel<span class="boot-cursor" id="bootCursor"></span></div>
+    <div class="boot-line" data-ok="OK">&gt; verifying node integrity</div>
+    <div class="boot-line" data-ok="OK">&gt; loading access terminal</div>
+    <div class="boot-line" data-ok="READY">&gt; terminal.init(session)</div>
+    <div class="boot-bar-track"><div class="boot-bar-fill" id="bootBar"></div></div>
+  </div>
+</div>
+ 
+<!-- Main stage -->
+<div class="stage" id="stage">
+  <div class="panel">
+ 
+    <!-- Left: console feed -->
+    <div class="console">
+      <div class="brand">
+<img class="brand-logo" src="images.jpeg" alt="KLNCE logo">
+        <div class="brand-name">KLN<span>CE</span></div>
+      </div>
+ 
+      <div class="console-feed" id="consoleFeed"></div>
+ 
+      <div class="console-quote">
+        <b>256-bit encrypted session.</b><br>
+        Every login is logged, signed, and verified against your last known device fingerprint.
+      </div>
+    </div>
+ 
+    <!-- Right: form -->
+    <div class="form-side">
+      <div class="center-logo-wrap">
+<img class="center-logo" src="images.jpeg" alt="KLNCE logo">
+      </div>
+      <div class="form-eyebrow" style="text-align:center;">KLNCE Restricted Access</div>
+      <div class="form-title" style="text-align:center;">Sign in to your portal</div>
+      <div class="form-sub" style="text-align:center;">Enter your credentials to decrypt your session.</div>
+ 
+      <form id="loginForm" novalidate>
+        <div class="field" id="userField">
+          <label for="username">Operator ID</label>
+          <div class="input-wrap">
+            <input type="text" id="username" name="username" placeholder="you@klnce.edu" autocomplete="username">
+          </div>
+          <div class="error-msg" id="userError">Enter a valid operator ID.</div>
+        </div>
+ 
+        <div class="field" id="passField">
+          <label for="password">Passphrase</label>
+          <div class="input-wrap">
+            <input type="password" id="password" name="password" placeholder="••••••••••" autocomplete="current-password">
+            <button type="button" class="toggle-eye" id="toggleEye" aria-label="Show password">
+              <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <div class="error-msg" id="passError">Passphrase must be at least 8 characters.</div>
+        </div>
+ 
+        <div class="row-between">
+          <label class="remember"><input type="checkbox" id="remember"> Remember this device</label>
+          <a href="#" class="forgot">Forgot passphrase?</a>
+        </div>
+ 
+        <button type="submit" class="submit-btn" id="submitBtn">
+          <span class="btn-label">
+            <span class="btn-spinner"></span>
+            <span class="btn-text">Decrypt &amp; Sign In</span>
+          </span>
+        </button>
+ 
+        <div class="decrypt-status" id="decryptStatus">&gt; verifying credentials...</div>
+      </form>
+ 
+      <div class="divider">OR CONTINUE WITH</div>
+      <div class="footer-note">No account? <a href="#">Request access</a></div>
+    </div>
+ 
+  </div>
+</div>
+ 
+<script>
+(function(){
+  // ---------- Ambient particles ----------
+  const particleWrap = document.getElementById('particles');
+  const N = 22;
+  for(let i=0;i<N;i++){
+    const p = document.createElement('div');
+    p.className = 'particle';
+    const left = Math.random()*100;
+    const dur = 10 + Math.random()*14;
+    const delay = Math.random()*14;
+    p.style.left = left+'vw';
+    p.style.bottom = '-10px';
+    p.style.animationDuration = dur+'s';
+    p.style.animationDelay = delay+'s';
+    particleWrap.appendChild(p);
+  }
+ 
+  // ---------- Boot sequence ----------
+  const lines = document.querySelectorAll('.boot-line');
+  const bootBar = document.getElementById('bootBar');
+  const boot = document.getElementById('boot');
+  const stage = document.getElementById('stage');
+ 
+  lines.forEach((line, i) => {
+    setTimeout(() => {
+      line.classList.add('show');
+      const okTag = document.createElement('span');
+      okTag.className = 'ok';
+      okTag.textContent = '[' + (line.dataset.ok || 'OK') + ']';
+      line.appendChild(okTag);
+    }, 260 * (i+1));
+  });
+ 
+  requestAnimationFrame(() => { bootBar.style.width = '100%'; });
+ 
+  setTimeout(() => {
+    boot.classList.add('hidden');
+    stage.classList.add('in');
+    startConsoleFeed();
+  }, 1900);
+ 
+  // ---------- Right-console decorative log feed ----------
+  function startConsoleFeed(){
+    const feed = document.getElementById('consoleFeed');
+    const entries = [
+      ['SESSION', '#a19f-7c22'],
+      ['NODE', 'edge-04.klnce.edu'],
+      ['ENCRYPTION', 'AES-256 / active'],
+      ['LATENCY', '18ms'],
+      ['THREAT SCAN', 'clear'],
+      ['LAST LOGIN', '2 days ago'],
+    ];
+    entries.forEach((entry, i) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.style.animationDelay = (i*0.12)+'s';
+      row.innerHTML = '<span class="tag">'+entry[0]+'</span> :: <span class="val">'+entry[1]+'</span>';
+      feed.appendChild(row);
+    });
+  }
+ 
+  // ---------- Password show/hide ----------
+  const pwInput = document.getElementById('password');
+  const toggleEye = document.getElementById('toggleEye');
+  const eyeIcon = document.getElementById('eyeIcon');
+  const eyeOpen = '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>';
+  const eyeClosed = '<path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a20.9 20.9 0 0 1 5.06-5.94M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a20.8 20.8 0 0 1-3.22 4.36"/><path d="M14.12 14.12A3 3 0 1 1 9.88 9.88"/><line x1="1" y1="1" x2="23" y2="23"/>';
+ 
+  toggleEye.addEventListener('click', () => {
+    const isPassword = pwInput.type === 'password';
+    pwInput.type = isPassword ? 'text' : 'password';
+    eyeIcon.innerHTML = isPassword ? eyeClosed : eyeOpen;
+    toggleEye.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+  });
+ 
+  // ---------- Validation ----------
+  const form = document.getElementById('loginForm');
+  const userField = document.getElementById('userField');
+  const passField = document.getElementById('passField');
+  const userInput = document.getElementById('username');
+  const submitBtn = document.getElementById('submitBtn');
+  const decryptStatus = document.getElementById('decryptStatus');
+ 
+  function setError(field, on){
+    field.classList.toggle('error', on);
+    if(on){
+      field.classList.remove('shake');
+      void field.offsetWidth;
+      field.classList.add('shake');
+    }
+  }
+ 
+  function validEmailish(v){
+    return v.trim().length > 2 && v.includes('@') && v.includes('.');
+  }
+ 
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+ 
+    const userOk = validEmailish(userInput.value);
+    const passOk = pwInput.value.length >= 8;
+ 
+    setError(userField, !userOk);
+    setError(passField, !passOk);
+ 
+    if(!userOk || !passOk) return;
+ 
+    // Hacker-style "decrypting" sequence before success
+    submitBtn.disabled = true;
+    submitBtn.classList.add('loading');
+    decryptStatus.classList.add('show');
+ 
+    const steps = [
+      '&gt; verifying credentials...',
+      '&gt; matching device fingerprint...',
+      '&gt; decrypting session token...',
+      '&gt; access granted.'
+    ];
+    let i = 0;
+    decryptStatus.innerHTML = steps[0];
+    const interval = setInterval(() => {
+      i++;
+      if(i < steps.length){
+        decryptStatus.innerHTML = steps[i];
+      } else {
+        clearInterval(interval);
+        submitBtn.classList.remove('loading');
+        submitBtn.disabled = false;
+        decryptStatus.style.color = 'var(--mint)';
+        // Replace this alert with your real auth redirect
+        setTimeout(() => alert('Access granted. (Hook this up to your auth endpoint.)'), 300);
+      }
+    }, 550);
+  });
+ 
+  userInput.addEventListener('input', () => setError(userField, false));
+  pwInput.addEventListener('input', () => setError(passField, false));
+})();
+</script>
+ 
+</body>
+</html>
+ 
